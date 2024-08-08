@@ -81,7 +81,27 @@ $$
 $$
 
 ```r
-#fill the code
+#Initialise the first daily return
+df$Daily_Return_AMD <- numeric(nrow(df))
+df$Daily_Return_GSPC <- numeric(nrow(df))
+df$Daily_Return_AMD[1] <- 0
+df$Daily_Return_GSPC[1] <- 0
+
+#Loop through the data set and calculate the daily returns for AMD and GSPC.
+for (i in 2:nrow(df)) {
+  if (!is.na(df$AMD[i]) && !is.na(df$AMD[i - 1]) && df$AMD[i - 1] != 0) {
+    df$Daily_Return_AMD[i] <- (df$AMD[i]- df$AMD[i - 1])/df$AMD[i - 1]
+  }  else {
+    df$Daily_Return_AMD[i] <- NA
+  }
+   if ( df$GSPC[i - 1] != 0 && !is.na(df$GSPC[i]) && !is.na(df$GSPC[i - 1])) {
+    df$Daily_Return_GSPC[i] <- (df$GSPC[i]- df$GSPC[i - 1])/df$GSPC[i - 1]
+    
+   } else {
+    df$Daily_Return_GSPC[i] <- NA
+  }
+  
+}
 ```
 
 - **Calculate Risk-Free Rate**: Calculate the daily risk-free rate by conversion of annual risk-free Rate. This conversion accounts for the compounding effect over the days of the year and is calculated using the formula:
@@ -91,21 +111,40 @@ $$
 $$
 
 ```r
-#fill the code
+#Initializes the Daily Risk-Free Rate to 0 
+df$Daily_RF <- 0
+
+#The loop goes through each dates imported adjusted Annual Risk Free rate and using the formula given, calculates the Daily Risk-Free Rate.
+for (i in 1:nrow(df)){
+  df$Daily_RF[i] = (1 + (df$RF[i])/100)^(1/360) - 1 
+}
 ```
 
 
 - **Calculate Excess Returns**: Compute the excess returns for AMD and the S&P 500 by subtracting the daily risk-free rate from their respective returns.
 
 ```r
-#fill the code
+#Intialises the excess returns to 0
+df$Excess_Returns_AMD <- 0
+df$Excess_Returns_GSPC <- 0
+
+#Loops through and calculates the daily excess return for AMD and S&P500  
+for (i in 1:nrow(df)){
+  df$Excess_Returns_AMD[i] <- df$Daily_Return_AMD[i] - df$Daily_RF[i]
+  df$Excess_Returns_GSPC[i] <- df$Daily_Return_GSPC[i] - df$Daily_RF[i]
+}
 ```
 
 
 - **Perform Regression Analysis**: Using linear regression, we estimate the beta (\(\beta\)) of AMD relative to the S&P 500. Here, the dependent variable is the excess return of AMD, and the independent variable is the excess return of the S&P 500. Beta measures the sensitivity of the stock's returns to fluctuations in the market.
 
 ```r
-#fill the code
+regression_model <- lm(df$Excess_Returns_AMD ~ df$Excess_Returns_GSPC, data = df)
+summary(regression_model)
+summary_model <- summary(regression_model)
+beta_value <- summary_model$coefficients[2,1]
+#Beta coefficient of approximately 1.570
+print(sprintf("Beta coefficient is approximately %.3f", beta_value))
 ```
 
 
@@ -113,14 +152,24 @@ $$
 
 What is your \(\beta\)? Is AMD more volatile or less volatile than the market?
 
-**Answer:**
+**Answer:** The beta coefficient for AMD’s excess returns is approximately 1.570, indicating higher volatility compared to the S&P500. Specifically, AMD’s beta values suggests that for every 1% change in the S&P 500 excess returns, AMD’s excess returns is expected to change 1.57%, reflecting higher risk and variability. Given the S&P500 serves as a broad market indicator, AMD is more volatile than the market.
 
 
 #### Plotting the CAPM Line
 Plot the scatter plot of AMD vs. S&P 500 excess returns and add the CAPM regression line.
 
 ```r
-#fill the code
+library(ggplot2)
+
+ggplot(df, aes(x = Excess_Returns_GSPC, y = Excess_Returns_AMD)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = 'lm', se = FALSE, col = "red") +
+  labs(
+    title = "CAPM Regression: AMD Vs S&P500 Excess Returns",
+      x =  "S&P500 Excess Returns",
+      y = "AMD Excess Returns"
+  ) +
+  theme_classic()
 ```
 
 ### Step 3: Predictions Interval
@@ -131,5 +180,37 @@ Suppose the current risk-free rate is 5.0%, and the annual expected return for t
 **Answer:**
 
 ```r
-#fill the code
+#Using the regression model, extract the daily standard error (sigma value).
+extract_summ <- summary(regression_model)
+s_f <- extract_summ$sigma
+
+#Convert the daily standard error to the annual standard error using the provided formula.
+#252 represents the number of days the markets open in a year.
+annual_s_f <- s_f*(sqrt(252))
+
+#Initialise values for the Expected Annual Return of AMD Formula.
+
+#Given Values.
+risk_free_rate <- 0.05
+exp_GSPC_return <- 0.133
+
+#Extract the Beta Value.
+amd_beta <- coef(regression_model)["df$Excess_Returns_GSPC"]
+
+#Calculation for expected AMD return (Capital Assest Pricing Model).
+exp_amd_return <- risk_free_rate + amd_beta*(exp_GSPC_return-risk_free_rate)
+
+#Using the z-score to calculate the prediction interval for the larger sample size (n >30) as the mean approaches normality, due to Central Limit Theorem.
+
+#Z-score for 90% confidence interval.
+z_score <- 1.645
+
+#Margin of Error
+error_margin <- z_score*annual_s_f
+
+#Prediction interval.
+upper <- (exp_amd_return + error_margin)*100
+lower <- (exp_amd_return - error_margin)*100
+
+print(sprintf("AMD's Annual Expected Return with a 90%% prediction interval is %.2f%% to %.2f%%", lower, upper))
 ```
